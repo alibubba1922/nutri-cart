@@ -446,9 +446,9 @@ function score(d,g){g=g||goal;if(!d)return 0;
  return -1}
 
 const HEALTHY_CREDIT=.25,CREDIT_CAP=.5;
-/*BE4*/const JTH={lean:[120,360,640,960],stay:[150,450,800,1200],strong:[200,550,950,1400],keto:[150,450,800,1200],bulk:[200,550,950,1400]},CTH=[1,2,3,5];
+/*BE4*/const JTH={lean:[120,360,640,960],stay:[150,450,800,1200],strong:[200,550,950,1400],keto:[150,450,800,1200],bulk:[200,550,950,1400]},CTH=[1,2,3,4];
 function junkStats(g){g=g||goal;let junk=0,healthyCal=0,junkN=0,goodN=0;for(const c of cart){const d=itemInfo(c);if(!d)continue;const cal=+c.cal||0;if(isJunk(d,g,c.n)){junk+=cal;junkN++}else{healthyCal+=cal;goodN++}}
- const credit=Math.round(Math.min(junk*CREDIT_CAP,healthyCal*HEALTHY_CREDIT));return{junk,healthy:healthyCal,credit,v:junk-credit,junkN,goodN,jn:junk>0?junkN*(junk-credit)/junk:junkN}}
+ const credit=Math.round(Math.min(junk*CREDIT_CAP,healthyCal*HEALTHY_CREDIT));return{junk,healthy:healthyCal,credit,v:junk-credit,junkN,goodN,jn:Math.max(0,junkN-(junkN&&goodN>=2?1:0))}}
 function junkStage(g){g=g||goal;const j=junkStats(g);return Math.max(JTH[g].filter(t=>j.v>=t).length,CTH.filter(t=>j.jn>=t-1e-9).length)}
 function bad(){return junkStats().junkN}
 function healthy(){return junkStage(goal)<=1}
@@ -502,16 +502,16 @@ const TH={lean:[300,700,1100,1500],stay:[400,900,1400,2000],strong:[600,1200,180
 function cartProt(){return cart.reduce((s,c)=>s+((itemInfo(c)||{}).prot||0),0)}
 function cartNet(){return cart.reduce((s,c)=>{const d=itemInfo(c);return s+(d&&!d.plu?(d.net||0):0)},0)}
 function cartCal(){return cart.reduce((s,c)=>s+(c.cal||0),0)}
-function avStage(){if(goal==="bulk"){const v=cartProt();return TH.bulk.filter(t=>v>=t).length}return junkStage(goal)}
+function avStage(){if(goal==="bulk"&&junkStage(goal)===0){const v=cartProt();return TH.bulk.filter(t=>v>=t).length}return junkStage(goal)}
 
 let avPrev=null;window.__stageLog=[];
 function cartAvatar(){
  const st=avStage(),ok=!cart.length||healthy();
- const mus=(goal==="bulk"||(typeof curType==="function"&&curType()===0));const who=selectedAvatar();const mode=mus?"muscle":"size";
- const changed=!!(avPrev&&avPrev.who===who.key&&avPrev.mode===mode&&avPrev.st!==st);const dir=changed?(st>avPrev.st?"up":"down"):"";
+ const mus=goal==="bulk"?junkStage(goal)===0:(typeof curType==="function"&&curType()===0);const who=selectedAvatar();const mode=mus?"muscle":"size";
+ const mchg=!!(avPrev&&avPrev.mode!==mode),changed=!!(avPrev&&avPrev.who===who.key&&(avPrev.st!==st||mchg));const dir=changed?(mchg?(mode==="size"?"up":"down"):st>avPrev.st?"up":"down"):"";
  if(changed)window.__stageLog.push({who:who.key,from:avPrev.st,to:st,mode});
  const j=junkStats();const lbl=mus?"muscle":"stage";
- $("cartAv").innerHTML=`<div id="cartFig" data-stage="${st}" data-mode="${mode}" data-who="${who.key}" class="${changed?"stagechg "+dir:""}"${changed?` data-prev="${avPrev.st}"`:""}><div class="figWrap">${changed?`<div class="figOld" aria-hidden="true">${fig(who,avPrev.st,ok?1:-1,mus?1:0)}</div>`:""}<div class="figNew">${figA(who,st,ok?1:-1,mus?1:0,avPrev&&avPrev.who===who.key&&avPrev.ac!=null?avPrev.ac:null)}</div></div><div style="text-align:center"><span class="stg">${changed?`${dir==="up"?"⬆":"⬇"} ${lbl} ${avPrev.st+1} → ${st+1}`:`${lbl} ${st+1}/5`}</span><span class="pips" aria-hidden="true">${[0,1,2,3,4].map(i=>`<i class="${i<=st?"on":""}"></i>`).join("")}</span>${changed?`<span class="sr" role="status">${who.n} moved to ${lbl} ${st+1} of 5</span>`:""}</div></div><div><div class="state">${who.n}: ${typeof cartStateLine==="function"?cartStateLine(who,ok):(ok?"⭐ Looking good this week!":"🌱 Not quite this week — a swap or two helps.")}</div><div class="note">Cart: ${cartCal()} cal · ${cartProt()} g protein · ${cartNet()} g net carbs (per serving) · ${mus?"":`treat cal ${j.v} (junk ${j.junk} − healthy credit ${j.credit}) · `}${lbl} ${st+1} of 5 · goal: ${goal}</div></div>`;
+ $("cartAv").innerHTML=`<div id="cartFig" data-stage="${st}" data-mode="${mode}" data-who="${who.key}" class="${changed?"stagechg "+dir:""}"${changed?` data-prev="${avPrev.st}"`:""}><div class="figWrap">${changed?`<div class="figOld" aria-hidden="true">${fig(who,avPrev.st,ok?1:-1,avPrev.mode==="muscle"?1:0)}</div>`:""}<div class="figNew">${figA(who,st,ok?1:-1,mus?1:0,avPrev&&avPrev.who===who.key&&avPrev.ac!=null?avPrev.ac:null)}</div></div><div style="text-align:center"><span class="stg">${changed?`${dir==="up"?"⬆":"⬇"} ${mchg?(avPrev.mode==="muscle"?"muscle":"stage")+" "+(avPrev.st+1)+" → "+lbl+" "+(st+1):lbl+" "+(avPrev.st+1)+" → "+(st+1)}`:`${lbl} ${st+1}/5`}</span><span class="pips" aria-hidden="true">${[0,1,2,3,4].map(i=>`<i class="${i<=st?"on":""}"></i>`).join("")}</span>${changed?`<span class="sr" role="status">${who.n} moved to ${lbl} ${st+1} of 5</span>`:""}</div></div><div><div class="state">${who.n}: ${typeof cartStateLine==="function"?cartStateLine(who,ok):(ok?"⭐ Looking good this week!":"🌱 Not quite this week — a swap or two helps.")}</div><div class="note">Cart: ${cartCal()} cal · ${cartProt()} g protein · ${cartNet()} g net carbs (per serving) · ${mus?"":`treat cal ${j.v} (junk ${j.junk} − healthy credit ${j.credit}) · `}${lbl} ${st+1} of 5 · goal: ${goal}</div></div>`;
  avPrev={who:who.key,st,mode,ac:ACNE_N[acneLevel()]};try{syncTeam(who,st,mus)}catch(e){}if(changed)stagePeek(dir)}
 function stagePeek(dir){try{const f=$("cartFig"),cp=$("cartP");if(!f||cp&&!cp.classList.contains("on"))return;let k=$("stPeek");if(!k){k=document.createElement("div");k.id="stPeek";k.setAttribute("aria-hidden","true");document.body.appendChild(k)}k.innerHTML="";[".figNew",".stg"].forEach(q=>{const e=f.querySelector(q);if(e)k.appendChild(e.cloneNode(true))});k.querySelectorAll("[id]").forEach(e=>e.removeAttribute("id"));k.className="";void k.offsetWidth;k.className="on "+dir;clearTimeout(k._t);k._t=setTimeout(()=>{k.className=""},2600)}catch(e){}}
 document.querySelectorAll(".goal[data-g]").forEach(b=>b.onclick=()=>{goal=GOALS.includes(b.dataset.g)?b.dataset.g:"stay";saveGoal();document.querySelectorAll(".goal").forEach(x=>x.classList.toggle("sel",x===b));render()});
